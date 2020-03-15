@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RestController
+import java.time.Instant
 import javax.persistence.Entity
 import javax.persistence.GeneratedValue
 import javax.persistence.GenerationType
@@ -21,40 +22,47 @@ fun main(args: Array<String>) {
 }
 
 @Entity
-data class Customer(var name: String? = null,
-                    var email: String? = null,
-                    @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
-                    var id: Long? = null)
+data class Audit(var msg: String? = null,
+                 val start: Instant = Instant.now(),
+                 var stop: Instant? = null,
+                 @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+                 var id: Long? = null) {
+    fun end() = this.apply { stop = Instant.now() }
+}
 
-interface CustomerRepository : CrudRepository<Customer, Long>
+interface AuditRepository : CrudRepository<Audit, Long>
 
 @Service
-class CustomerService(
-        private val customerRepository: CustomerRepository
-) {
+class BillingService(private val auditRepository: AuditRepository) {
 
     @Transactional
-    fun writeToDbAndExternalSystem() {
-        val customer = customerRepository.save(Customer("ali"))
-        customer.email = getCustomerEmailFromExternalSystem()
-        customerRepository.save(customer)
+    fun createCustomer() {
+        val audit = auditRepository.save(Audit("calling billing webservice"))
+        callBillingWebService()
+        auditRepository.save(audit.end())
     }
 
-    fun list(): Iterable<Customer> = customerRepository.findAll()
-
-    private fun getCustomerEmailFromExternalSystem(): String {
+    private fun callBillingWebService() {
         Thread.sleep(10 * 1000)
-        return "ali@example.com"
     }
 }
 
-@RestController
-class CustomerController(
-        private val customerService: CustomerService
-) {
-    @PostMapping
-    fun createNew() = customerService.writeToDbAndExternalSystem()
+@Service
+class AuditService(private val auditRepository: AuditRepository) {
 
-    @GetMapping
-    fun list(): Iterable<Customer> = customerService.list()
+    fun list() = auditRepository.findAll()
+}
+
+@RestController
+class BillingController(
+        private val auditService: AuditService,
+        private val billingService: BillingService
+) {
+    // curl -X POST localhost:8080/billing/customer
+    @PostMapping("/billing/customer")
+    fun createNew() = billingService.createCustomer()
+
+    // curl localhost:8080/audit
+    @GetMapping("/audit")
+    fun getAudit() = auditService.list()
 }
