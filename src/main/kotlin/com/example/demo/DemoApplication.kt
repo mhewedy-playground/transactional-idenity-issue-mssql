@@ -21,16 +21,19 @@ fun main(args: Array<String>) {
     runApplication<DemoApplication>(*args)
 }
 
-@Entity
-data class Audit(var msg: String? = null,
-                 val start: Instant = Instant.now(),
-                 var stop: Instant? = null,
-                 @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
-                 var id: Long? = null) {
-    fun end() = this.apply { stop = Instant.now() }
-}
+@RestController
+class BillingController(
+        private val auditService: AuditService,
+        private val billingService: BillingService
+) {
+    // curl -X POST localhost:8080/billing/customer
+    @PostMapping("/billing/customer")
+    fun createNew() = billingService.createCustomer()
 
-interface AuditRepository : CrudRepository<Audit, Long>
+    // curl localhost:8080/audit
+    @GetMapping("/audit")
+    fun getAudit() = auditService.list()
+}
 
 @Service
 class BillingService(private val auditRepository: AuditRepository) {
@@ -53,16 +56,13 @@ class AuditService(private val auditRepository: AuditRepository) {
     fun list() = auditRepository.findAll()
 }
 
-@RestController
-class BillingController(
-        private val auditService: AuditService,
-        private val billingService: BillingService
-) {
-    // curl -X POST localhost:8080/billing/customer
-    @PostMapping("/billing/customer")
-    fun createNew() = billingService.createCustomer()
+interface AuditRepository : CrudRepository<Audit, Long>
 
-    // curl localhost:8080/audit
-    @GetMapping("/audit")
-    fun getAudit() = auditService.list()
+@Entity
+data class Audit(var msg: String? = null,
+                 val start: Instant = Instant.now(),
+                 var stop: Instant? = null,
+                 @Id @GeneratedValue(strategy = GenerationType.IDENTITY)
+                 var id: Long? = null) {
+    fun end() = this.apply { stop = Instant.now() }
 }
